@@ -12,7 +12,7 @@
  * Date: 2016-05-20T17:17Z
  */
 
-(function ( global, factory ) {
+;(function ( global, factory ) {
 
     if(typeof module === "object" && typeof module.exports ==="object"){
         // For CommonJS and CommonJS-like environments where a proper `window`
@@ -204,9 +204,39 @@ jQuery.extend( {
     // See test/unit/core.js for details concerning isFunction.
     // Since version 1.3, DOM methods and functions like alert
     // aren't supported. They return false on IE (#2968). //此方法在 IE 下无法正确识别 DOM 方法和一些函数（例如 alert 方法等）。
+    isFunction: function ( obj ) {
+      return 
+    },
+  
+    isWindow: function ( obj ) {
+        /* jshint eqeqeq: false */  //配置 jshint 忽略 != 与 == 的报告
+      return obj != null && obj == obj.window; //检测对自身的引用
+    },
+
+    type: function ( obj ) {
+      if ( obj == null ) { // 如果参数是 null 或 undefined 直接返回
+          return obj + "";
+      }
+      return typeof obj === "object" || typeof obj === "function" ?
+        class2type[ toString.call( obj ) ] || "object" :
+        typeof obj; // 简单类型的（非new）直接返回 typeof 的值
+    }
+
+    
+});
+// 全局用到的方法和变量
+jQuery.each( "Boolean Number String Function Array Date RegExp Object Error Sympol".split( " " ),
+function ( i, name ) {
+  class2type[ "[object " + name +"]" ] = name.toLowerCase();
 });
 
+function isArrayLike( obj ) {
 
+  // Support: iOS 8.2 (not reproducible in simulator)
+  // `in` check used to prevent JIT error (gh-2145)
+  // hasOwn isn't used here due to false negatives
+  // regarding Nodelist length in IE
+}
 
 
 
