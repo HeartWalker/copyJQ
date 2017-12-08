@@ -80,11 +80,11 @@ var
     rtrim = /^[\s\uFEFF\xA0]+|[\s\uFEFF\xA0]+$/g, //匹配两端空格
 
     //Matches dashed string for camelizing  将虚线和字符串转化为驼峰
-    rmsPrefix = /^-ms-/, // IE中的前缀 -ms 转成： Ms
+    rmsPrefix = /^-ms-/, // IE中的前缀 -ms 转成： ms- 例如 -ms-transform 对应 msTransform 而不是 MsTransform,-moz-Transform 对应 MozTransform
     rdashAlpha = /-([\da-z])/gi, //转大小写   -left  转成 Left
 
     // Used by jQuery.cameCase as callback to replace()
-    fcameCase = function ( all ,letter ) { //使用处??
+    fcameCase = function ( all ,letter ) { //  replace 的替换函数, 对第一个分组执行toUpperCase()后将匹配到的字符串替换
         return letter.toUpperCase();
     };
 
@@ -205,12 +205,82 @@ jQuery.extend( {
     // Since version 1.3, DOM methods and functions like alert
     // aren't supported. They return false on IE (#2968). //此方法在 IE 下无法正确识别 DOM 方法和一些函数（例如 alert 方法等）。
     isFunction: function ( obj ) {
-      return 
+      return jQuery.type( obj ) === "function";
+    },
+
+    isArray: Array.isArray || function ( obj ) {
+        return jQuery.type( obj ) === "array";
     },
   
     isWindow: function ( obj ) {
         /* jshint eqeqeq: false */  //配置 jshint 忽略 != 与 == 的报告
       return obj != null && obj == obj.window; //检测对自身的引用
+    },
+
+    isNumeric: function ( obj ) {
+        //??
+        // parseFloat NaNs numeric-cast false positives (null|true|false|"")
+        // ...but misinterprets leading-number strings, particularly hex literals ("0x...")
+        // subtraction forces infinities to NaN
+        // adding 1 corrects loss of precision from parseFloat (#15100)
+        var realStringObj = obj && obj.toString(); //首先过滤掉数组, 这里不能把object类型的过滤掉，因为通过new Number()实例化的数值型变量，也是数字
+        return !jQuery.isArray( obj ) && ( realStringObj - parseFloat( realStringObj ) + 1 ) >= 0;
+    },
+
+    isEmptyObject: function ( obj ) {
+        var name;
+        for ( name in obj ) {
+            return false;
+        }
+        return true;
+    },
+
+    isPlainObject: function ( obj ) { //检测是否是纯粹的对象 既 用 {} 或 new Object() 创建的对象
+
+        //Must be an Object.
+        // Because of IE, we also have to check the presence of the constructor property.
+        // Make sure that DOM nodes and window objects don't pass through, as well
+        if ( !obj || jQuery.type( obj ) !== "object" || obj.nodeType || jQuery.isWindow( obj ) ) {
+            return false;
+        }
+
+        try {
+
+            // Not own constructor property must be Object ??
+            if ( obj.constructor &&
+                !hasOwn.call( obj, "constructor" ) &&
+                !hasOwn.call( obj.constructor.prototype, "isPrototypeOf" ) ) {
+                return false;
+            }
+        } catch ( e ) {
+
+            // IE8,9 Will throw exceptions on certain host objects $9897
+            return false;
+        }
+
+        // Support: IE<9 现代浏览器先循环实例中的属性，再循环原型中的属性。低版本浏览器相反。
+        // Handle iteration over inherited properties before own properties.
+        if( !support.ownFirst ) { //?? 在自己的属性之前迭代继承属性
+            for ( key in obj ) {
+                return hasOwn.call( obj, key );
+            }
+        }
+
+        // Own properties are enumerated firstly, so to speed up,
+        // if last one is own, then all properties are own.
+        for ( key in obj ) {}
+        //for...in循环中先循环的是非继承属性然后是继承属性，当然非继承属性的propertyIsEnumerable必须为true利用这个原理如果最后被循环的属性是继承属性那就返回false,如果最后一个是非继承属性那就肯定全是非继承属性返回true
+        return key === undefined || hasOwn.call( obj ,key );
+    },
+
+    // Convert dashed to camelCase; used by the css and data modules 将前划线转为驼峰
+    // Microsoft forgot to hump their vendor prefix (#9572)
+    camelCase: function ( string ) {
+        return string.replace( rmsPrefix, "ms-" ).replace( rdashAlpha, fcameCase );
+    },
+    // 检测 DOM 元素节点名称是否与传入的值相等,DOM 元素的 nodeName 返回其节点名称,HTML 返回大写但是 xml 区分大小写会返回源码的值
+    nodeName: function ( elem, name ) {
+      return elem.nodeName && elem.nodeName.toLowerCase() === name.toLowerCase();
     },
 
     type: function ( obj ) {
@@ -220,7 +290,29 @@ jQuery.extend( {
       return typeof obj === "object" || typeof obj === "function" ?
         class2type[ toString.call( obj ) ] || "object" :
         typeof obj; // 简单类型的（非new）直接返回 typeof 的值
+    },
+
+    each: function ( obj, callback ) {
+        var length, i = 0;
+
+        if ( isArrayLike( obj ) ) {
+            length = obj.length;
+            for ( ; i < length; i++ ) {
+                if ( callback.call( obj[ i ], i, obj[ i ] ) === false ) {
+                    break;
+                }
+            }
+        } else {
+            for ( i in obj ) {
+                if ( callback.call( obj[ i ], i, obj[ i ]) === false ) {
+                    break;
+                }
+            }
+        }
+
+        return obj;
     }
+
 
     
 });
@@ -236,6 +328,16 @@ function isArrayLike( obj ) {
   // `in` check used to prevent JIT error (gh-2145)
   // hasOwn isn't used here due to false negatives
   // regarding Nodelist length in IE
+  var length = !!obj && "length" in obj && obj.length, // 如果 obj 为true，有length属性，则length等于obj.length,否则length为false
+      type = jQuery.type( obj );
+
+  if (type === "function" || jQuery.isWindow( obj ) ) {
+      return false;
+  }
+    // obj本身是数组，则返回true obj不是数组，但有length属性且为0，例如{length : 0}，则返回true
+  return type === "array" || length === 0 ||
+        typeof length === "number" && length > 0 && ( length - 1 ) in obj;      // obj不是数组,但有length属性且为整数数值，obj[length - 1]存在，则返回true
+
 }
 
 
