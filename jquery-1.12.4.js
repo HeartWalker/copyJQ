@@ -75,7 +75,7 @@ var
         return new jQuery.fn.init( selector, context);
     },
 
-    // Support: Android<4.1, IE<9
+    // Support: Android<4.1, IE<9 此版本下 \s 不支持不间断空格 \xA0 \uFEFF是字节次序标记
     // Make sure we trim BOM and NBSP
     rtrim = /^[\s\uFEFF\xA0]+|[\s\uFEFF\xA0]+$/g, //匹配两端空格
 
@@ -273,6 +273,29 @@ jQuery.extend( {
         return key === undefined || hasOwn.call( obj ,key );
     },
 
+    type: function ( obj ) {
+        if ( obj == null ) { // 如果参数是 null 或 undefined 直接返回
+            return obj + "";
+        }
+        return typeof obj === "object" || typeof obj === "function" ?
+            class2type[ toString.call( obj ) ] || "object" :
+            typeof obj; // 简单类型的（非new）直接返回 typeof 的值
+    },
+
+    // Workarounds based on findings by Jim Driscoll
+    // http://weblogs.java.net/blog/driscoll/archive/2009/09/08/eval-javascript-global-context
+    globalEval: function ( data ) {
+        if( data && jQuery.trim( data ) ) {
+            // https://www.cnblogs.com/bender/p/3362449.html
+            // We use execScript on Internet Explorer                    //IE浏览器我们用window.execScript，同时我们用了匿名函数从而让context是window
+            // We use an anonymous function so that context is window    //如果不用匿名函数，在FF浏览器中，context是jquery对象。在FF中我们用window["eval"]
+            // rather than jQuery in Firefox                            //确保环境是window
+            ( window.execScript || function ( data ) { // eval 的 this 指向问题,execScript无论是在什么作用域(global/local)内被调用，它所接受到的表达式(expression)或语句(statements)字符串都将在全局作用域内执行(global)；eval则是在它被调用时所在的作用域内运行它所接受到的表达式(expression)或语句(statements)字符串
+              window[ "eval" ].call( window, data ); // jscs:ignore requireDotNotation ??
+            } )( data );
+        }
+    },
+
     // Convert dashed to camelCase; used by the css and data modules 将前划线转为驼峰
     // Microsoft forgot to hump their vendor prefix (#9572)
     camelCase: function ( string ) {
@@ -281,15 +304,6 @@ jQuery.extend( {
     // 检测 DOM 元素节点名称是否与传入的值相等,DOM 元素的 nodeName 返回其节点名称,HTML 返回大写但是 xml 区分大小写会返回源码的值
     nodeName: function ( elem, name ) {
       return elem.nodeName && elem.nodeName.toLowerCase() === name.toLowerCase();
-    },
-
-    type: function ( obj ) {
-      if ( obj == null ) { // 如果参数是 null 或 undefined 直接返回
-          return obj + "";
-      }
-      return typeof obj === "object" || typeof obj === "function" ?
-        class2type[ toString.call( obj ) ] || "object" :
-        typeof obj; // 简单类型的（非new）直接返回 typeof 的值
     },
 
     each: function ( obj, callback ) {
@@ -311,10 +325,168 @@ jQuery.extend( {
         }
 
         return obj;
-    }
+    },
 
+    // Support: Android<4.1, IE<9
+    trim: function ( text ) {
+        return text == null ?
+            "" : // 参数是 null 和 undefiend 返回 ""
+            ( text + "" ).replace( rtrim, "" );// 不再使用ES5的 String.prototype.trim
+    },
 
-    
+    // results is for internal usage only  results 仅在内部使用
+    makeArray: function (arr, results ) {
+      var ret = results || [];
+
+      if ( arr != null ) {
+          if ( isArrayLike( Object( arr ) ) ) {
+              jQuery.merge( ret ,
+              typeof arr === "string" ?
+              [ arr ] : arr  // 如果arr是字符串,不放到[] 中会被merge拆分成单个字母
+              );
+          } else {
+              push.call( ret , arr );
+          }
+      }
+
+      return ret;
+    },
+
+    inArray: function ( elem, arr, i ) {
+        var len;
+
+        if( arr ) {
+            if( indexOf ) {
+                return indexOf.call( arr, elem, i);
+            }
+
+            len = arr.length; //如果i<0 修正为从后查找, 如果 len + i 仍为负数则修正i为0
+            i = i ? i < 0 ? Math.max( 0, len + i ) : i  :0;
+
+            for ( ; i < len; i++ ) {
+
+                // Skip accessing in sparse arrays 在稀疏数组中跳过查找
+               if ( i in arr && arr[ i ] === elem ) {
+                   return i;
+               }
+            }
+        }
+
+        return -1;
+    },
+
+    merge: function ( first, second ) { // 合并数组 second 可以是类数组
+        var len = +second.length,
+            j = 0,
+            i = first.length;
+
+        while ( j < len ) {
+            first[ i++ ] = second[ j++ ];
+        }
+
+        // Support: IE<9
+        // Workaround casting of .length to NaN on otherwise arraylike objects (e.g., NodeLists)  工作区会将类数组对象的 length 属性转化为 NaN
+        if ( len !== len ) {
+            while ( second[ j ] !== undefined ) {
+                first[ i++ ] = second[ j++ ];
+            }
+        }
+
+        first.length = i; // 修正 first 的length
+
+        return first;
+    },
+
+    grep: function ( elems, callback, invert ) {//callback 返回布尔值, invert 为 FALSE 返回满足过滤条件的值组成的数组
+        var callbackInverse,
+            matches = [],
+            i = 0,
+            length = elsms.length,
+            callbackExpect = !invert;
+
+        // Go through the array , only saving the items
+        // that pass the validator function
+        for ( ; i < length; i++ ) {
+            callbackInverse = !callback( elems[ i ], i );
+            if ( callbackInverse !== callbackExpect ) {
+                mathches.push( elems[ i ] );
+            }
+        }
+
+        return matches;
+    },
+
+    // arg is for internal uasge only | arg 仅在内部使用
+    map: function ( elems, callback, arg ) {
+        var length, value,
+            i = 0,
+            ret = [];
+
+        // ?? Go through the array, translating each of the items to their new values
+        if ( isArrayLike( elems ) ) {
+            length = elems.length;
+            for ( ; i < length; i++ ) {
+                value = callback( elems[ i ], i, arg );
+
+                if ( value != null ) {
+                    ret.push( value );
+                }
+            }
+
+        // Go through every key on the object,
+        } else {
+            for ( i in elems ) {
+                value = callback( elems[ i ], i, arg );
+
+                if ( value != null ) {
+                    ret.push( value );
+                }
+            }
+        }
+
+        // Flatten any nested arrays
+        return concat.apply( [], ret );
+    },
+
+    // A global GUID counter for objects 一个全局的计数器用于事件与缓存模块
+    guid: 1,
+
+    // Bind a function to a context, optionally partially applying any arguments.
+    // 接收一个函数返回一个新函数,新函数总有特定的上下文,有两种用法; proxy(fn, context) 指定fn函数的上下文始终为context
+    proxy: function ( fn, context ) {  //proxy(context,name) 指定参数name对应函数的上下文始终为context,name这个函数必须是前一个参数 ‘context’ 对象的属性
+        var args, proxy, tmp;
+
+        if ( typeof context === "string" ) {//第二种调用方式
+            tmp = fn[ context ];
+            context = fn;
+            fn = tmp;
+        }
+
+        // Quick check to determine if target is callable, in the spec
+        // this throws a TypeError, but we will just return undefined.
+        if ( !jQuery.isFunction( fn ) ) { //如果 fn 不是函数,防止报错返回undefi
+            return undefined;
+        }
+
+        // Simulated bind
+        args = slice.call( arguments, 2 );
+        proxy = function () {
+            return fn.apply( context || this, args.concat( slice.call( arguments ) ) ); //柯里化,arguments 表示形参 ,和上两行的并不相同
+        };
+
+        // Set the guid of unique handler to the same of original handler, so it can be removed
+        proxy.guid = fn.guid = fn.guid || jQuery.guid++;
+
+        return proxy; //??
+    },
+
+    now: function () {
+        return +( new Date() );
+    },
+
+    // jQuery.support is not used in Core but other projects attach their
+    // properties to it so it needs to exist.
+    spport: support //jQuery.support 没有这个代码核心中使用, 但是其它项目依赖于它的属性,所以它需要存在
 });
 // 全局用到的方法和变量
 jQuery.each( "Boolean Number String Function Array Date RegExp Object Error Sympol".split( " " ),
