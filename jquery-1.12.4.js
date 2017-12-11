@@ -115,7 +115,61 @@ jQuery.fn = jQuery.prototype = {
             //如果 num 小于 0, 修正为数组的倒序下标,否则就是当前下标
             // Return all the elements in a clean array
             slice.call( this );//如果是 undefiend 或 null,返回一个数组
-    }
+    },
+
+    // Take an array of elements and push it onto the stack
+    // (returning the new matched element set)
+    pushStack: function ( elems ) {
+
+        // Bulid a new jQuery matched element set
+        var ret = jQuery.merge( this.constructor(), elems );
+
+        // Add the old ovject onto the stack (as a reference)
+        ret.prevObject = this;
+        ret.context = this.context;
+
+        // Return the newly-formed element set
+        return ret;
+    },
+
+    // Execute a callback for every element in the matched set.
+    each: function ( callback ) {
+        return jQuery.each( this, callback );
+    },
+
+    map: function ( callback ) {
+      return this.pushStack( jQuery.map( this, function ( elem, i ) {
+          return callback( i, elem, elem );
+      } ) );
+    },
+
+    slice: function () {
+        return this.pushStack( slice.apply( this, arguments ) );
+    },
+
+    first: function () {
+        return this.eq( 0 );
+    },
+
+    last: function () {
+        return this.eq( -1 );
+    },
+
+    eq: function ( i ) {
+      var len = this.length,
+          j = +i + ( i < 0 ? len : 0 );
+      return this.pushStack( j >=0 && j < len ? [ this[ j ] ] : [] );
+    },
+
+    end: function () {
+        return this.prevObject || this.constructor();
+    },
+
+    // For internal use only.
+    // Beheaves like an ARray's method, not like a jQuery method.
+    push: push,
+    sort: deletedIds.sort,
+    splice: deletedIds.splice
 };
 //  用来将多个对象合并到第一个对象 target, 如果只有一个对象, target 将被忽略, 对象会被合并到 jQuery 或 jQuery.fn上
 jQuery.extend = jQuery.fn.extend = function () { //params ([deep],target,object1,[object2])
@@ -236,7 +290,7 @@ jQuery.extend( {
     },
 
     isPlainObject: function ( obj ) { //检测是否是纯粹的对象 既 用 {} 或 new Object() 创建的对象
-
+        var key;
         //Must be an Object.
         // Because of IE, we also have to check the presence of the constructor property.
         // Make sure that DOM nodes and window objects don't pass through, as well
@@ -487,7 +541,19 @@ jQuery.extend( {
     // jQuery.support is not used in Core but other projects attach their
     // properties to it so it needs to exist.
     spport: support //jQuery.support 没有这个代码核心中使用, 但是其它项目依赖于它的属性,所以它需要存在
-});
+} );
+
+
+// JSHint would error on this code due to the Symbol not being defined in ES5.
+// Defining this global in .jshintrc would create a danger of using the global
+// unguarded in another place, it seems safer to just disable JSHint for these
+// three lines.
+    /* jshint ignore: start */
+    if ( typeof Symbol === "function" ) { // ?? 如果Symbol 存在,为JQuery.fn 指定遍历器
+        jQuery.fn[ Symbol.iterator ] = deletedIds[ Symbol.iterator ];
+    }
+/* jshint ignore: end */
+
 // 全局用到的方法和变量
 jQuery.each( "Boolean Number String Function Array Date RegExp Object Error Sympol".split( " " ),
 function ( i, name ) {
@@ -509,9 +575,21 @@ function isArrayLike( obj ) {
     // obj本身是数组，则返回true obj不是数组，但有length属性且为0，例如{length : 0}，则返回true
   return type === "array" || length === 0 ||
         typeof length === "number" && length > 0 && ( length - 1 ) in obj;      // obj不是数组,但有length属性且为整数数值，obj[length - 1]存在，则返回true
-
 }
+var Sizzle =
+/*!
+ * Sizzle CSS Selector Engine v2.2.1
+ * http://sizzlejs.com/
+ *
+ * Copyright jQuery Foundation and other contributors
+ * Released under the MIT license
+ * http://jquery.org/license
+ *
+ * Date: 2015-10-17
+ */
+(function ( window ) {
 
+})( window );
 
 
 //兼容 AMD 规范
