@@ -589,7 +589,55 @@ var Sizzle =
  */
 (function ( window ) {
 
-})( window );
+var i,// 索引
+  support, //浏览器支持
+  Expr, // 正则表达式
+  getText, // 兼容的getText函数
+  isXML, // 文档根节点是否是 xml
+  tokenize, //
+  compile, //
+  select, //
+  outermostContext,
+  sortInput,
+  hasDuplicate,
+
+  // Local document vars
+
+  // Instance-specific data 实例的具体特性
+  expando = "sizzle" + 1 * new Date(), // 使用 1* 将new Date() 转换为数字，唯一标识符
+
+ // General-purpose constants 通用的常量
+  MAX_NEGATIVE = 1 << 31,
+
+  // Instance methods
+  hasOwn = ({}).hasOwnProperty,
+  arr =  [],
+  pop = arr.pop,
+  push = arr.push,
+  slice = arr.slice,
+  // Use a stripped-down indexOf as it's faster than native
+  // http://jsperf.com/thor-indexof-vs-for/5
+  indexOf = function ( list, elem ) {
+    var i = 0,
+      len = list.length;
+    for ( ; i < len; i++ ) {
+        if ( list[i] === elem ) {
+            return i;
+        }
+    }
+    return -1;
+  },
+    // 布尔值的属性
+  booleans = "checked|selected|async|autofocus|autoplay|controls|defer|disabled|hidden|ismap|loop|multiple|open|readonly|required|scoped",
+
+  // Regular expressions  正则表达式
+
+  // http://www.w3.org/TR/css3-selectors/#whitespace 空白符
+  white = "[\\x20\\t\\r\\n\\f]",
+
+  // http://www.w3.org/TR/CSS21/syndata.html#value-def-identifier  [^\\x00-\\xa0]表示双字节字符
+  identifier = "(?:\\\\.|[\\w-]|[^\\x00-\\xa0])+"
+  })( window );
 
 
 //兼容 AMD 规范
