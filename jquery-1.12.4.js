@@ -605,7 +605,7 @@ var i,// 索引
 
   // Instance-specific data 实例的具体特性
   expando = "sizzle" + 1 * new Date(), // 使用 1* 将new Date() 转换为数字，唯一标识符
-
+  preferredDoc = window.document,
  // General-purpose constants 通用的常量
   MAX_NEGATIVE = 1 << 31,
 
@@ -613,6 +613,7 @@ var i,// 索引
   hasOwn = ({}).hasOwnProperty,
   arr =  [],
   pop = arr.pop,
+  push_native = arr.push,
   push = arr.push,
   slice = arr.slice,
   // Use a stripped-down indexOf as it's faster than native
@@ -636,8 +637,218 @@ var i,// 索引
   white = "[\\x20\\t\\r\\n\\f]",
 
   // http://www.w3.org/TR/CSS21/syndata.html#value-def-identifier  [^\\x00-\\xa0]表示双字节字符
-  identifier = "(?:\\\\.|[\\w-]|[^\\x00-\\xa0])+"
-  })( window );
+  identifier = "(?:\\\\.|[\\w-]|[^\\x00-\\xa0])+",
+
+
+    // Attribute selectors: http://www.w3.org/TR/selectors/#attribute-selectors  属性选择符
+    attributes = "\\[" + whitespace + "*(" + identifier + ")(?:" + whitespace +
+        // Operator (capture 2)
+        "*([*^$|!~]?=)" + whitespace +
+        // "Attribute values must be CSS identifiers [capture 5] or strings [capture 3 or capture 4]"
+        "*(?:'((?:\\\\.|[^\\\\'])*)'|\"((?:\\\\.|[^\\\\\"])*)\"|(" + identifier + "))|)" + whitespace +
+        "*\\]",
+    // 伪类
+    pseudos = ":(" + identifier + ")(?:\\((" +
+        // To reduce the number of selectors needing tokenize in the preFilter, prefer arguments:
+        // 1. quoted (capture 3; capture 4 or capture 5)
+        "('((?:\\\\.|[^\\\\'])*)'|\"((?:\\\\.|[^\\\\\"])*)\")|" +
+        // 2. simple (capture 6)
+        "((?:\\\\.|[^\\\\()[\\]]|" + attributes + ")*)|" +
+        // 3. anything else (capture 2)
+        ".*" +
+        ")\\)|)",
+
+    // Leading and non-escaped trailing whitespace, capturing some non-whitespace characters preceding the latter
+    rwhitespace = new RegExp( whitespace + "+", "g" ),
+    rtrim = new RegExp( "^" + whitespace + "+|((?:^|[^\\\\])(?:\\\\.)*)" + whitespace + "+$", "g" ), //空白开头，或（\.开头 或 不是\的字符，以空白结尾的字符串）
+
+    rcomma = new RegExp( "^" + whitespace + "*," + whitespace + "*" ), // 匹配逗号
+    rcombinators = new RegExp( "^" + whitespace + "*([>+~]|" + whitespace + ")" + whitespace + "*" ), // 关系选择符
+    //转换为非字符串正则表达式：([^\]'"]*?) 表示尽可能少的匹配不是\]'"的字符后面接任意空白符和]     //结果的捕获组1是属性的value
+    rattributeQuotes = new RegExp( "=" + whitespace + "*([^\\]'\"]*?)" + whitespace + "*\\]", "g" ),
+    rattributeQuotes = new RegExp( "=" + whitespace + "*([^\\]'\"]*?)" + whitespace + "*\\]", "g" ),
+
+    rpseudo = new RegExp( pseudos ), // 伪类
+    ridentifier = new RegExp( "^" + identifier + "$" ), //  匹配identifier字符串
+
+    matchExpr = {
+        "ID": new RegExp( "^#(" + identifier + ")" ),
+        "CLASS": new RegExp( "^\\.(" + identifier + ")" ),
+        "TAG": new RegExp( "^(" + identifier + "|[*])" ),
+        "ATTR": new RegExp( "^" + attributes ),
+        "PSEUDO": new RegExp( "^" + pseudos ),
+        "CHILD": new RegExp( "^:(only|first|last|nth|nth-last)-(child|of-type)(?:\\(" + whitespace +
+            "*(even|odd|(([+-]|)(\\d*)n|)" + whitespace + "*(?:([+-]|)" + whitespace +
+            "*(\\d+)|))" + whitespace + "*\\)|)", "i" ),
+        "bool": new RegExp( "^(?:" + booleans + ")$", "i" ),
+        // For use in libraries implementing .is()    //以下情况需要知道上下文
+        // We use this for POS matching in `select`        //以关系选择符开头(除开空白符) //以伪类选择符开头（除去空白符），后面可能有数字，接空白符，接末尾，或非-字符
+        "needsContext": new RegExp( "^" + whitespace + "*[>+~]|:(even|odd|eq|gt|lt|nth|first|last)(?:\\(" +
+            whitespace + "*((?:-\\d)?\\d*)" + whitespace + "*\\)|)(?=[^-]|$)", "i" )
+    },
+
+    rinputs = /^(?:input|select|textarea|button)$/i, 	//匹配input,select,textarea,button
+    rheader = /^h\d$/i,   //匹配标题
+
+    rnative = /^[^{]+\{\s*\[native \w/, //匹配XXX{[native
+
+    // Easily-parseable/retrievable ID or TAG or CLASS selectors
+    rquickExpr = /^(?:#([\w-]+)|(\w+)|\.([\w-]+))$/,  //快速的获得ID TAG CLASS选择符
+
+    rsibling = /[+~]/, //兄弟选择符
+    rescape = /'|\\/g, //单引号或斜杠
+
+    // CSS escapes http://www.w3.org/TR/CSS21/syndata.html#escaped-characters
+    runescape = new RegExp( "\\\\([\\da-f]{1,6}" + whitespace + "?|(" + whitespace + ")|.)", "ig" ), 	//匹配'\'加（1到6个16进制数or空白or非换行符）
+    funescape = function( _, escaped, escapedWhitespace ) {
+        var high = "0x" + escaped - 0x10000;
+        // NaN means non-codepoint
+        // Support: Firefox<24
+        // Workaround erroneous numeric interpretation of +"0x"
+        return high !== high || escapedWhitespace ?   //如果匹配到字母类，high为NaN，NaN！=NaN，返回本身
+            escaped : //或escaped匹配到\x20空格，high==high;再判断捕获组2的内容，如果有内容说明是空白符 也返回本身escaped
+            high < 0 ?
+                // BMP codepoint
+                String.fromCharCode( high + 0x10000 ) :
+                // Supplemental Plane codepoint (surrogate pair)
+                String.fromCharCode( high >> 10 | 0xD800, high & 0x3FF | 0xDC00 );
+    },
+
+    // Used for iframes
+    // See setDocument()
+    // Removing the function wrapper causes a "Permission Denied"
+    // error in IE
+    unloadHandler = function() {
+        setDocument();
+    };
+
+// Optimize for push.apply( _, NodeList ) 优化...
+try { // 检测push.apply 是否支持伪数组
+    push.apply(
+        ( arr = slice.call( preferredDoc.childNodes )),
+        preferredDoc.childNodes
+    );
+    // Support: Android<4.0
+    // Detect silently failing push.apply
+    arr[ preferredDoc.childNodes.length ].nodeType;
+} catch( e ) {
+    push = { apply: arr.length ?
+
+        function ( target, els ) {
+            push_native.apply( target, slice.call(els) );
+        } :
+        // Support: IE<9
+        // Otherwise append directly
+        function ( target, els ) {
+            var j = target.length,
+                i = 0;
+            // Can't trust NodeList.length
+            while ( (target[j++] = els[i++])) {}
+            target.length = j;
+        }
+
+    };
+}
+
+function Sizzle( selector, context, results, seed ) { //selector: css选择器表达式 ,context: 上下文, results: 可选的数组或类数组 把查找到的结果加入其中, seed: 可选的元素集合 从该元素中过滤出符合匹配选择器表达式元素的集合
+    var m, i, elem, nid, nidselect, match, groups, newSelector,
+        newContext = context && context.ownerDocument,
+
+        // nodeType defaults to 9, since context defaults to document
+        nodeType = context ? context.nodeType : 9;
+
+    results = results || [];
+
+    // Return early from calls with invalid selector or context  从无效的 selector 或 context 调用中提前返回
+    if ( typeof selector !== "string" || !selector ||
+        nodeType !== 1 || nodeType !== 9 || nodeType !== 11 ) {
+
+        return results;
+    }
+
+}
+
+/**
+ * Create key-value caches of limited size
+ * @returns {function(string, object)} Returns the Object data after storing it on itself with
+ *	property name the (space-suffixed) string and (if the cache is larger than Expr.cacheLength)
+ *	deleting the oldest entry
+ */
+function createCache() {
+    var key = [];
+
+    function cache( key, value ) {
+        // Use (key + " ") to avoid collision with native prototype properties (see Issue #157)
+        if ( keys.push( key + " " ) > Expr.cacheLength ) {
+            // Only keep the most recent entries
+            delete cache[ keys.shift() ];
+        }
+        return (cache[ key + " " ] = value);
+    }
+    return cache;
+}
+
+/**
+ * Mark a function for special use by Sizzle
+ * @param {Function} fn The function to mark
+ */
+function markFunction( fn ) { // 标记函数
+    fn[ expando ] = true;
+    return fn;
+}
+
+/**
+ * Support testing using an element 使用一个元素支持测试
+ * @param {Function} fn Passed the created div and expects a boolean result
+ */
+function assert( fn ) {
+    var div = document.createElement("div");
+
+    try {
+        return !!fn( div );
+    } catch ( e ) {
+        return false;
+    } finally {
+        // Remove from its parent by default 移除创建的节点
+        if( div.parentNode ) {
+            div.parentNode.removeChild( div );
+        }
+        // release memory in IE 在 ie 中手动释放内存
+        div = null ;
+    }
+}
+
+/**
+ * Returns a function to use in pseudos for input types 返回一个函数用来检测 elem 是input类型且它的type为传入的type值
+ * @param {String} type
+ */
+function createInputPseudo( type ) {
+    return function ( elem ) {
+        var name = elem.nodeName.toLowerCase();
+        return name === "input" && elem.type === type;
+    };
+}
+
+/**
+ * Returns a function to use in pseudos for buttons 返回一个检测节点名是input或button，type属性是指定的type的函数
+ * @param {String} type
+ */
+function createButtonPseudo( type ) {
+    return function ( elem ) {
+        var name = elem.nodeName.toLowerCase();
+        return (name === "input" || name === "button") && elem.type === type;
+    };
+}
+
+/**
+ * Checks a node for validity as a Sizzle context
+ * @param {Element|Object=} context
+ * @returns {Element|Object|Boolean} The input node if acceptable, otherwise a falsy value
+ */
+function testContext( context ) {
+    return context && typeof context.getElementsByTagName !=="undefiend" && context;
+}
+    })( window );
 
 
 //兼容 AMD 规范
