@@ -602,6 +602,7 @@ var i,// 索引
   hasDuplicate,
 
   // Local document vars
+  setDocument,
 
   // Instance-specific data 实例的具体特性
   expando = "sizzle" + 1 * new Date(), // 使用 1* 将new Date() 转换为数字，唯一标识符
@@ -848,6 +849,42 @@ function createButtonPseudo( type ) {
 function testContext( context ) {
     return context && typeof context.getElementsByTagName !=="undefiend" && context;
 }
+
+// Expose support vars for convenience  为了方便暴露 support 变量
+support = Sizzle.support = {};
+
+/**
+ * Detects XML nodes 检测 XML 节点
+ * @param {Element|Object} elem An element or a document
+ * @returns {Boolean} True iff elem is a non-HTML XML node
+ */
+isXML = Sizzle.isXML = function ( elem ) {
+    // documentElement is verified for cases where it doesn't yet exist
+    // (such as loading iframes in IE - #4833)
+    var documentElement = elem && (elem.ownerDocument || elem).documentElement;
+    return documentElement ? documentElement.nodeName !== "HTML" : false;
+};
+
+/**
+ * Sets document-related variables once based on the current document
+ * @param {Element|Object} [doc] An element or document object to use to set the document
+ * @returns {Object} Returns the current document
+ *///Sizzle的setDocument函数，根据当前文档设置文档相关的变量，参数element or document，返回current document 这个函数主要任务是测试浏览器对相关函数的支持，从而写出兼容的ID，TAG，CLASS的find和filter函数；测试浏览器对querySelectorAll函数的支持程度，建立对不支持的情况过滤的正则表达式rbuggyQSA；重写兼容的contains和sortOrder方法。
+setDocument = Sizzle.setDocument = function ( node ) {
+    var hasCompare, parent,
+        doc = node ? node.ownerDocument || node : preferredDoc;
+    // Return early if doc is invalid or already selected 如果doc是无效的或者是被选择的提前返回(非document的节点??)
+    if ( doc === document || doc.nodeType !== 9 || !doc.documentElement ) {
+        return document;  // 初次执行时document是undefiend
+    }
+}
+
+
+// Initialize against the default document 初始化默认文档
+setDocument();
+
+
+
     })( window );
 
 
