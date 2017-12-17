@@ -591,7 +591,7 @@ var Sizzle =
 
 var i,// 索引
   support, //浏览器支持
-  Expr, // 正则表达式
+  Expr, // 扩展方法和属性
   getText, // 兼容的getText函数
   isXML, // 文档根节点是否是 xml
   tokenize, //
@@ -603,10 +603,28 @@ var i,// 索引
 
   // Local document vars
   setDocument,
+  document,
+  docElem,
+  documentIsHTML,
+  rbuggyQSA,
+  rbuggyMatches,
+  matches,
+  contains,
 
   // Instance-specific data 实例的具体特性
   expando = "sizzle" + 1 * new Date(), // 使用 1* 将new Date() 转换为数字，唯一标识符
   preferredDoc = window.document,
+  dirruns = 0,
+  done = 0,
+  classCache = createCache(),
+  tockenCache = createCache(),
+  compiler = createCache(),
+  sortOrder = function ( a, b ) { // 如果a与b相等，重置hasDuplicat 为true
+    if ( a === b ) {
+        hasDuplicate = true;
+    }
+    return 0;
+  },
  // General-purpose constants 通用的常量
   MAX_NEGATIVE = 1 << 31,
 
@@ -635,7 +653,7 @@ var i,// 索引
   // Regular expressions  正则表达式
 
   // http://www.w3.org/TR/css3-selectors/#whitespace 空白符
-  white = "[\\x20\\t\\r\\n\\f]",
+  whitespace = "[\\x20\\t\\r\\n\\f]",
 
   // http://www.w3.org/TR/CSS21/syndata.html#value-def-identifier  [^\\x00-\\xa0]表示双字节字符
   identifier = "(?:\\\\.|[\\w-]|[^\\x00-\\xa0])+",
@@ -666,7 +684,6 @@ var i,// 索引
     rcomma = new RegExp( "^" + whitespace + "*," + whitespace + "*" ), // 匹配逗号
     rcombinators = new RegExp( "^" + whitespace + "*([>+~]|" + whitespace + ")" + whitespace + "*" ), // 关系选择符
     //转换为非字符串正则表达式：([^\]'"]*?) 表示尽可能少的匹配不是\]'"的字符后面接任意空白符和]     //结果的捕获组1是属性的value
-    rattributeQuotes = new RegExp( "=" + whitespace + "*([^\\]'\"]*?)" + whitespace + "*\\]", "g" ),
     rattributeQuotes = new RegExp( "=" + whitespace + "*([^\\]'\"]*?)" + whitespace + "*\\]", "g" ),
 
     rpseudo = new RegExp( pseudos ), // 伪类
@@ -701,7 +718,7 @@ var i,// 索引
 
     // CSS escapes http://www.w3.org/TR/CSS21/syndata.html#escaped-characters
     runescape = new RegExp( "\\\\([\\da-f]{1,6}" + whitespace + "?|(" + whitespace + ")|.)", "ig" ), 	//匹配'\'加（1到6个16进制数or空白or非换行符）
-    funescape = function( _, escaped, escapedWhitespace ) {
+    funescape = function( _, escaped, escapedWhitespace ) { // 一个replace的回调函数
         var high = "0x" + escaped - 0x10000;
         // NaN means non-codepoint
         // Support: Firefox<24
@@ -735,6 +752,7 @@ try { // 检测push.apply 是否支持伪数组
 } catch( e ) {
     push = { apply: arr.length ?
 
+      // Leverage slice if possible
         function ( target, els ) {
             push_native.apply( target, slice.call(els) );
         } :
@@ -776,7 +794,7 @@ function Sizzle( selector, context, results, seed ) { //selector: css选择器�
  *	deleting the oldest entry
  */
 function createCache() {
-    var key = [];
+    var keys = [];
 
     function cache( key, value ) {
         // Use (key + " ") to avoid collision with native prototype properties (see Issue #157)
@@ -877,8 +895,88 @@ setDocument = Sizzle.setDocument = function ( node ) {
     if ( doc === document || doc.nodeType !== 9 || !doc.documentElement ) {
         return document;  // 初次执行时document是undefiend
     }
+
+  // Update global variables
+  document = doc;
+  docElem = document.documentElement;
+  documentIsHTML = !isXML( document );
+
+  // Support: IE 9-11, Edge 	//IE678不支持defaultView属性，parent会是undefined
+  // Accessing iframe documents after unload throws "permission denied" 访问卸载后的 iframe documents 将会抛出没有权限的异常
+  if ( (parent = document.defaultView) && parent.top !== parent ) {
+      // Support:IE 11  //IE11没有attachEvent，所以先检查addEventListerer
+    if ( parent.addEventListener ) {
+        parent.addEventListener( "unload", unloadHandler, false );
+
+      // Support: IE 9 - 10 only
+    } else if ( parent.attachEvent ) {
+        parent.attachEvent( "onunload", unloadHandler );
+    }
+
+  }
+
+  /* Attributes
+     ---------------------------------------------------------------------- */
+
+  // Support: IE<8
+  // Verify that getAttribute really returns attributes and not properties //检查getAttribute真的返回了属性值，而不是（调用它的对象的）属性
+  // (excepting IE8 booleans)   //(排除IE8的布尔值)
+  support.attributes = assert(function ( div ) {
+    div.className = "i"; //这里设置了类名，应该用"       "取得i;如果使用“className”取得i，返回false;
+    return !div.getAttribute("className");    //即设置了DOM元素的attribute，而不是对象的property
+
+  });
+
+   /* getElement(s)By*
+     ---------------------------------------------------------------------- */
+
+  // Check if getElementsByTagName("*") returns only elements  检查getELementsByTagName（“*”）返回的是否只有元素节点类型（可能有注释节点）
+    support.getElementsByTagName = assert(function ( div ) {
+      div.appendChild( document.createComment("") ); 	//创建并添加注释节点
+      return !div.getElementsByTagName("*").length; //使用getElementsByTagName("*")如果得到结果length不为0，返回false
+    })
+
+  // Support: IE<9 //检测是否有该方法
+  support.getElementsByClassName = rnative.test( document.getElementsByClassName );
+  // Support: IE<10
+  // Check if getElementById returns elements by name
+  // The broken getElementById methods don't pick up programatically-set names,
+  // so use a roundabout getElementsByName test
+  support.getById = assert(function ( div ) {
+    docElem.appendChild( div ).id = expando;  // 通过getElementsByName 能否取到 id 来检测getElementById 的兼容性，来检测getElementById在低版本Ie中可能会取到相同name的标签
+    return !document.getElementsByName || !document.getElementsByName( expando ).length;
+  });
+
+
 }
 
+
+Sizzle.error = function ( msg ) {
+  throw new Error( "Syntax error, unrecognized expression: " +msg );
+};
+
+
+Expr = Sizzle.selector = {// 减少字符，缩短作用域链，方便压缩
+
+  // Can be adjusted by the user
+  cacheLength: 50,
+
+  createPseudo: markFunction,
+
+  match: matchExpr,
+
+  attrHandle: {},
+
+  find: {},
+
+  relative: {
+    ">": { dir: "parentNode", first: true },
+    " ": { dir: "parentNode" },
+    "+": { dir: "previousSibling", first: true },
+    "~": { dir: "previousSibling" }
+  },
+
+};
 
 // Initialize against the default document 初始化默认文档
 setDocument();
