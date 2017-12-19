@@ -606,7 +606,7 @@ var i,// 索引
   document,
   docElem,
   documentIsHTML,
-  rbuggyQSA,
+  rbuggyQSA, // querySelectorAll 的bug
   rbuggyMatches,
   matches,
   contains,
@@ -618,7 +618,7 @@ var i,// 索引
   done = 0,
   classCache = createCache(),
   tockenCache = createCache(),
-  compiler = createCache(),
+  compilerCache = createCache(), // 编译缓存
   sortOrder = function ( a, b ) { // 如果a与b相等，重置hasDuplicat 为true
     if ( a === b ) {
         hasDuplicate = true;
@@ -785,6 +785,89 @@ function Sizzle( selector, context, results, seed ) { //selector: css选择器�
         return results;
     }
 
+    // Try to shortcut find operations (as opposed to filters) in HTML documents 尝试在HTML文档中快捷地查找操作（而不是过滤器）
+    if (!seed ) {
+
+        if ( ( context ? context.ownerDocument || context : preferredDoc ) !== document ) {
+            setDocument( context );
+        }
+        context = context || document;
+
+        if ( documentIsHTML ) {
+            // 如果选择符足够简单, 尝试使用 "get*By*" 系列 DOM 方法, （除了documentfragment语境，这些方法不存在）
+            // If the selector is sufficiently simple, try using a "get*By*" DOM method
+            // (excepting DocumentFragment context, where the methods don't exist)
+            if ( nodeType !== 11 && (match = rquickExpr.exec( selector )) ) {
+                //selector只存在三种选择器的情况下（id，tag，class）,的快速处理方法 context类型不是DocumentFragment,且selector中匹配到rquickExpr
+                // ID selector
+                if ( (m = match[1]) ){
+
+                    // Dccument context
+                    if ( nodeType === 9 ) {
+                        if ( (elem = context.getElementById( m )) ) {
+
+                            // Support: IE, Opera, Webkit
+                            // TODO: identify versions
+                            // getElementById can match elements by name instead of ID 有些浏览器使用getElementById也返回name，需要去除
+                            if ( elem.id === m ) {
+                                results.push( elem );
+                                return results;
+                            }
+                        } else {
+                            return results;
+                        }
+
+                    // Element context
+                    } else {
+
+                        // Support: IE, Opera, Webkit
+                        // TODO: identify versions
+                        // getElementById can match elements by name instead of ID
+                        if ( newContext && (elem = newContext.getElementById( m )) && //上下文不是Document类型，如果context.ownerDocument存在且其中存在id/name为m的元素，
+                            contains( context, elem  ) &&  //  且该元素是context的子元素,且该元素的id为m
+                            elem.id === m ) {
+
+                            results.push( elem );                         //添加elem到结果集，返回结果
+                            return results;
+                        }
+                    }
+
+                // Type selector
+                } else if( match[2] ) {
+                    push.apply( results , context.getElementsByTagName( selector ) );
+                    return results;
+
+                // Class selector
+                } else if ( (m = match[3]) && support.getElementsByClassName &&
+                    context.getElementsByClassName ) {
+
+                    push.apply( results, context.getElementsByClassName( m ) );
+                    return results;
+                }
+            }
+        // Take advantage of querySelectorAll 使用 querySelector
+        if ( support.qsa &&  //浏览器支持querySelectorAll
+            !compilerCache[ selector + " " ] && // 且 不存在缓存
+            (!rbuggyQSA || !rbuggyQSA.test( selector )) ) {  //且（rbbuggyQSA不存在或selector没有与rbuggyQSA匹配的）
+
+            if ( nodeType !== 1 ) { // 如果不是不是子节点
+                newContext = context;
+                newSelector = selector;
+
+            // qSA looks outside Element context, which is not what we want
+            // Thanks to Andrew Dupont for this workaround technique
+            // Support: IE <=8
+            // Exclude object elements 不包括对象元素
+            } else if ( context.nodeName.toLowerCase() !== "object" ) {
+
+                // Capture the context ID, setting it first if necessary 捕捉上下文的 id,必要时先设置它
+
+            }
+
+        }
+        }
+
+    }
 }
 
 /**
@@ -975,6 +1058,21 @@ Expr = Sizzle.selector = {// 减少字符，缩短作用域链，方便压缩
     "+": { dir: "previousSibling", first: true },
     "~": { dir: "previousSibling" }
   },
+    
+  filter: {
+      "TAG": function ( nodeNameSelector ) {
+          var nodeName = nodeNameSelector.replace( runescape, funescape ).toLowerCase();
+          return nodeNameSelector === "*" ?
+              function() { return true; } :
+              function ( elem ) {
+                  return elem.nodeName && elem.nodeName.toLowerCase() === nodeName;
+              };
+      },
+      "CLASS": function ( className ) {
+          var pattern = classCache[ className + " " ];
+
+      }
+  }  
 
 };
 
