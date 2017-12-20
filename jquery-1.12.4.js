@@ -594,7 +594,7 @@ var i,// 索引
   Expr, // 扩展方法和属性
   getText, // 兼容的getText函数
   isXML, // 文档根节点是否是 xml
-  tokenize, //
+  tokenize, // 解析CSSselector，分组
   compile, //
   select, //
   outermostContext,
@@ -626,7 +626,7 @@ var i,// 索引
     return 0;
   },
  // General-purpose constants 通用的常量
-  MAX_NEGATIVE = 1 << 31,
+  MAX_NEGATIVE = 1 << 31, // 最大负数
 
   // Instance methods
   hasOwn = ({}).hasOwnProperty,
@@ -845,6 +845,7 @@ function Sizzle( selector, context, results, seed ) { //selector: css选择器�
                     return results;
                 }
             }
+
         // Take advantage of querySelectorAll 使用 querySelector
         if ( support.qsa &&  //浏览器支持querySelectorAll
             !compilerCache[ selector + " " ] && // 且 不存在缓存
@@ -861,13 +862,45 @@ function Sizzle( selector, context, results, seed ) { //selector: css选择器�
             } else if ( context.nodeName.toLowerCase() !== "object" ) {
 
                 // Capture the context ID, setting it first if necessary 捕捉上下文的 id,必要时先设置它
+                if ( (nid = context.getAttribute( "id" )) ) { // /如果上下文有id属性，赋给nid
+                    nid = nid.replace( rescape, "\\$&"); ///修改nid的值为 替换old中的每个单引号和斜杠为$&
+                } else {  ////没有id属性，则给上下文设置id属性为nid = expando, //这样保证context有id属性，让QSA正常工作
+                    context.setAttribute( "id", (nid = expando) );
+                }
 
+                // Prefix every selector in the list 对selector进行分组
+                groups = tokenize( selector );
+                i = groups.length;
+                nidselect = ridentifier.test( nid ) ? "#" + nid : "[id='" + nid + "']";
+                while ( i-- ) {  // 	//给分组的每个选择器添加头部 nidselect + " " 属性选择器
+                    groups[i] = nidselect + " " + toSelector( groups[i] );
+                }
+                newSelector = groups.join( "," );
+
+                // Expand context for sibling selectors } 如果selector存在+~兄弟选择器，且上下文的父节点是符合要求的上下文（看testContext测试参数是否有getElementsByTageName，返回参数本身或false）
+                newContext = rsibling.test( selector ) && testContext( context.parentNode ) ||  //返回context.parentNode
+                    context; //否则返回context本身
             }
 
+            if ( newSelector ) {
+                try {
+                    push.apply( results,
+                        newContext.querySelectorAll( newSelector )
+                    );
+                    return results;
+                } catch ( qsaError ) {
+                } finally {
+                    if (nid === expando ) {
+                        context.removeAttribute( "id" );
+                    }
+                }
+            }
         }
         }
-
     }
+
+    // All others //其他情况调用select函数，去掉selector前后的空白作为参数
+    return select( selector.replace( rtrim, "$1" ), context, results, seed );
 }
 
 /**
@@ -921,6 +954,49 @@ function assert( fn ) {
 }
 
 /**
+ * Adds the same handler for all of the specified attrs   用 | 分割 attrs 的属性列表
+ * @param {String} attrs Pipe-separated list of attributes    //给所有属性添加相同的处理函数
+ * @param {Function} handler The method that will be applied
+ */
+function addHandle( attrs, handler ) {
+    var arr = attrs.split("|"),
+        i = arr.length;
+
+    while ( i-- ) {
+        Expr.attrHandle[ arr[i] ] = handler;
+    }
+}
+
+/**
+ * Checks document order of two siblings 检测 a b 的先后顺序
+ * @param {Element} a
+ * @param {Element} b
+ * @returns {Number} Returns less than 0 if a precedes b, greater than 0 if a follows b // a在b之前返回小于0.
+ */
+function siblingCheck( a, b ) {
+    var cur = b && a, ////如果b存在且a存在，返回a
+        diff = cur && a.nodeType === 1 && b.nodeType === 1 &&
+            ( ~b.sourceIndex || MAX_NEGATIVE ) -  ///~b.index即对b.index按位取反，不能转换为数字则返回NaN
+            ( ~a.sourceIndex || MAX_NEGATIVE );
+
+    // Use IE sourceIndex if available on both nodes 	//ie支持sourceIndex就使用它
+    if ( diff ) {
+        return diff;
+    }
+
+    // Check if b follows a  检测 b 跟随 a
+    if ( cur ) {
+        while ( (cur = cur.nextSibling ) ) {
+            if ( cur === b ) {
+                return -1;
+            }
+        }
+    }
+
+    return a ? 1 : -1;
+}
+
+/**
  * Returns a function to use in pseudos for input types 返回一个函数用来检测 elem 是input类型且它的type为传入的type值
  * @param {String} type
  */
@@ -940,6 +1016,28 @@ function createButtonPseudo( type ) {
         var name = elem.nodeName.toLowerCase();
         return (name === "input" || name === "button") && elem.type === type;
     };
+}
+
+/**
+ * Returns a function to use in pseudos for positionals  //传入参数fn，返回一个函数，调用这个函数（argument）又返回一个函数（seed，matches），
+ * @param {Function} fn  //这个函数给fn传入参数[],seed.length,argument  // fn返回matchIndexes，seed中匹配matchIndexes的项取反，matches得到匹配项
+ *///由fn获得匹配元素的index值，再将seed中未匹配的项置为false，matches添加匹配的项
+function createPositionalPseudo( fn ) {
+    return markFunction( function ( argument ) {
+       argument = +argument;
+       return markFunction( function ( seed, matches ) {
+          var j,
+              matchIndexes = fn( [], seed.length, argument ),
+              i = matchIndexes.length;
+
+          // Match elements found at the specified indexes 匹配在指定索引处找到的元素
+           while ( i-- ) {
+               if ( seed[ (j = matchIndexes[i]) ] ) {
+                   seed[j] = !(matches[j] = seed[j]);
+               }
+           }
+       });
+    });
 }
 
 /**
@@ -1079,6 +1177,16 @@ Expr = Sizzle.selector = {// 减少字符，缩短作用域链，方便压缩
 // Initialize against the default document 初始化默认文档
 setDocument();
 
+// tokens 转化为selector
+function toSelector( tokens ) {
+    var i = 0,
+        len = tokens.length,
+        selector = "";
+    for ( ; i < len; i++ ) {
+        selector += tokens[i].value;
+    }
+    return selector;
+}
 
 
     })( window );
