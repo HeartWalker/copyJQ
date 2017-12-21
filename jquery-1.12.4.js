@@ -718,7 +718,7 @@ var i,// 索引
 
     // CSS escapes http://www.w3.org/TR/CSS21/syndata.html#escaped-characters
     runescape = new RegExp( "\\\\([\\da-f]{1,6}" + whitespace + "?|(" + whitespace + ")|.)", "ig" ), 	//匹配'\'加（1到6个16进制数or空白or非换行符）
-    funescape = function( _, escaped, escapedWhitespace ) { // 一个replace的回调函数
+    funescape = function( _, escaped, escapedWhitespace ) { // 处理字符串中的转义字符
         var high = "0x" + escaped - 0x10000;
         // NaN means non-codepoint
         // Support: Firefox<24
@@ -1128,6 +1128,103 @@ setDocument = Sizzle.setDocument = function ( node ) {
     return !document.getElementsByName || !document.getElementsByName( expando ).length;
   });
 
+    // ID find and filter
+    if ( support.getById ) {
+        Expr.find["ID"] = function ( id, context ) {
+            if ( typeof  context.getElementById !== "undefined" && documentIsHTML ) {
+                var m = context.getElementById( id );
+                return m ? [ m ] : [];
+            }
+        };
+        Expr.filter["ID"] = function ( id ) {
+            var attrId = id.replace( runescape, funescape );
+            return function ( elem ) {
+                return elem.getAttribute("id") === attrId;
+            };
+        };
+    } else {
+        // Support: IE6/7
+        // getElementById is not reliable as a find shortcut
+        delete Expr.find["ID"];
+
+        Expr.filter["ID"] = function ( id ) {
+            var attrId = id.replace( runescape, funescape );
+            return function ( elem ) {
+                var node = typeof elem.getAttributeNode !== "undefined" &&
+                        elem.getAttributeNode("id");
+                return node && node.value === attrId;
+            };
+        };
+    }
+
+    // Tag
+    Expr.find["TAG"] = support.getElementsByTagName ?
+        function ( tag, context ) {
+            if ( typeof context.getElementsByTagName !== "undefined" ) {
+                return context.getElementsByTagName( tag );
+
+                // DocumentFragment nodes don't have gEBTN  DocumentFragment 节点 没有getElementsByClassName
+            } else if ( support.qsa ) {
+                return context.querySelectorAll( tag );
+            }
+        } :
+
+        function ( tag, context ) {
+            var elem,
+                tmp = [],
+                i = 0,
+                // By happy coincidence, a (broken) gEBTN appears on DocumentFragment nodes too
+                results = context.getElementsByTagName( tag );
+
+            // Filter out possible comments 过滤掉可能出现的注释节点
+            if ( tag === "*" ) {
+                while ( (elem = results[i++]) ) {
+                    if ( elem.nodeType === 1) {
+                        tmp.push( elem );
+                    }
+                }
+
+                return tmp;
+            }
+            return results;
+        };
+
+    // Class
+    Expr.find["CLASS"] = support.getElementsByClassName && function ( className, context ) {
+            if ( typeof context.getElementsByClassName !== "undefined" && documentIsHTML ) {
+                return context.getElementsByClassName( className );
+            }
+        };
+
+    /* QSA/matchesSelector
+     ---------------------------------------------------------------------- */
+
+    // QSA and matchesSelector support
+
+    // matchesSelector(:active) reports false when true (IE9/Opera 11.5) (:active)选择符在IE9、Opera11.5中报错，当它应该是正确的时候
+    rbuggyMatches = [];
+
+    // qSa(:focus) reports false when true (Chrome 21)  qsa(:focus)选择符报错，当应该是正确的时候，在Chrome21中
+    // We allow this because of a bug in IE8/9 that throws an error  在IE8/9中访问iframe的document.activeElement总会抛出错误
+    // whenever `document.activeElement` is accessed on an iframe
+    // So, we allow :focus to pass through QSA all the time to avoid the IE error  所以我们允许 :focus 总是能通过QSA去避免在IE中的错误
+    // See http://bugs.jquery.com/ticket/13378
+    rbuggyQSA = [];
+
+    if ( (support.qsa = rnative.test( document.querySelectorAll)) ) {
+        // Build QSA regex
+        // Regex strategy adopted from Diego Perini
+        assert(function ( div ) {
+            // Select is set to empty string on purpose  //select被故意置空字符串
+            // This is to test IE's treatment of not explicitly // 用来测试ie不明确的处理
+            // setting a boolean content attribute, // 设置一个布尔值属性，
+            // since its presence should be enough  // 因为它的存在就足够了
+            // http://bugs.jquery.com/ticket/12359
+            docElem.appendChild( div ).innerHTML = "<a id='" + expando + "'></a>" +
+                "<select id='" + expando + "-\r\\' msallowcapture=''>" +
+                "<option selected=''></option></select>";
+        });
+    }
 
 }
 
