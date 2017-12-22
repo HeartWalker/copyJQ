@@ -1223,8 +1223,66 @@ setDocument = Sizzle.setDocument = function ( node ) {
             docElem.appendChild( div ).innerHTML = "<a id='" + expando + "'></a>" +
                 "<select id='" + expando + "-\r\\' msallowcapture=''>" +
                 "<option selected=''></option></select>";
+
+            // Support: IE8, Opera 11-12.16
+            // Nothing should be selected when empty strings follow ^= or $= or *=  // 如果^=,$=,*=后面为空字符串，不应该返回任何东西
+            // The test attribute must be unknown in Opera but "safe" for WinRT
+            // http://msdn.microsoft.com/en-us/library/ie/hh465388.aspx#attribute_section  	//返回了内容，浏览器对QSA支持有bug，给rbuggyQSA添加正则表达式
+            if ( div.querySelectorAll("[msallowcapture^='']").length ) {
+                rbuggyQSA.push( "[*^$]=" + whitespace + "*(?:''|\"\")" );
+            }
+
+            // Support: IE8
+            // Boolean attributes and "value" are not treated correctly //布尔类型属性和value属性未被正确处理
+            if ( !div.querySelectorAll("[selected]").length ) {
+                rbuggyQSA.push( "\\[" + whitespace + "*(?:value|" + booleans + ")" );
+            }
+
+            // Support: Chrome<29, Android<4.4, Safari<7.0+, iOS<7.0+, PhantomJS<1.9.8+
+            if ( !div.querySelectorAll( "[id~=" + expando + "-]" ).length ) {
+                rbuggyQSA.push("~=");
+            }
+
+            // Webkit/Opera - :checked should return selected option elements
+            // http://www.w3.org/TR/2011/REC-css3-selectors-20110929/#checked
+            // IE8 throws error here and will not see later tests
+            if ( !div.querySelectorAll(":checked").length ) {
+                rbuggyQSA.push(":checked");
+            }
+
+            // Support: Safari 8+, iOS 8+
+            // https://bugs.webkit.org/show_bug.cgi?id=136851
+            // In-page `selector#id sibing-combinator selector` fails
+            if ( !div.querySelectorAll( "a#" + expando + "+*" ).length ) {
+                rbuggyQSA.push(".#.+[+~]");
+            }
+        });
+
+        assert( function ( div ) {
+            // Support: Windows 8 Native Apps
+            // The type and name attributes are restricted during .innerHTML assignment
+            var input = document.createElement("input");
+            input.setAttribute( "type", "hidden" );
+            div.appendChild( input ).setAttribute( "name", "D" );
+
+            // Support: IE8
+            // Enforce case-sensitivity of name attribute 	//强制对name属性大小写敏感
+            if ( div.querySelectorAll("[name=d]").length ) {
+                rbuggyQSA.push( "name" + whitespace + "*[*^$|!~]?=" ); 	//大写属性用小写查找得到，给rbuggyQSA添加正则表达式 name whitespace* [*^$|!~]?=
+            }
+
+            // FF 3.5 - :enabled/:disabled and hidden elements (hidden elements are still enabled)  //对hidden处理不正确导致endble和disable不再可靠
+            // IE8 throws error here and will not see later tests
+            if ( !div.querySelectorAll(":enabled").length ) {
+                rbuggyQSA.push( ":enabled", ":disabled" );
+            }
+
+            // Opera 10-11 does not throw on post-comma invalid pseudos
+            div.querySelectorAll("*,:x");
+            rbuggyQSA.push(",.*:");
         });
     }
+
 
 }
 
