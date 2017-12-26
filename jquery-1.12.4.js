@@ -599,7 +599,7 @@ var i,// 索引
   select, //
   outermostContext,
   sortInput,
-  hasDuplicate,
+  hasDuplicate, // 重复标志
 
   // Local document vars
   setDocument,
@@ -607,7 +607,7 @@ var i,// 索引
   docElem,
   documentIsHTML,
   rbuggyQSA, // querySelectorAll 的bug
-  rbuggyMatches,
+  rbuggyMatches, // matches 的bug
   matches,
   contains,
 
@@ -1283,6 +1283,71 @@ setDocument = Sizzle.setDocument = function ( node ) {
         });
     }
 
+    if ( (support.matchesSelector = rnative.test( (matches = docElem.matches ||
+            docElem.webkitMatchesSelector ||
+            docElem.mozMatchesSelector ||
+            docElem.oMatchesSelector ||
+            docElem.msMatchesSelector) )) ) {
+
+        assert(function( div ) {
+            // Check to see if it's possible to do matchesSelector
+            // on a disconnected node (IE 9)
+            support.disconnectedMatch = matches.call( div, "div" );
+
+            // This should fail with an exception
+            // Gecko does not error, returns false instead
+            matches.call( div, "[s!='']:x" );  ////这里应该执行失败，抛出错误
+            rbuggyMatches.push( "!=", pseudos ); ////没有抛出错误，添加正则表达式
+        });
+    }
+
+    rbuggyQSA = rbuggyQSA.length && new RegExp( rbuggyQSA.join("|") );
+    rbuggyMatches = rbuggyMatches.length && new RegExp( rbuggyMatches.join("|") );
+
+    /* Contains
+    --------------------------------------------------------------------- */
+    hasCompare = rnative.test( docElem.compareDocumentPosition ); // 测试是否支持原生 compareDocumentPosition 方法比较两个节点，并返回描述它们在文档中位置的整数。
+
+    // Element contains another
+    // Purposefully self-exclusive
+    // As in, an element does not contain itself
+    contains = hasCompare || rnative.test( docElem.contains ) ?  //支持原生compareDocumentPosition或contains
+        function( a, b ) {
+            var adown = a.nodeType === 9 ? a.documentElement : a,
+                bup = b && b.parentNode;
+            return a === bup || !!( bup && bup.nodeType === 1 && (	//a就是b的父节点，返回true  //bup存在且是元素节点，
+                adown.contains ?
+                    adown.contains( bup ) :  //若adown有contains方法，返回adown.cotains(bup),
+                    a.compareDocumentPosition && a.compareDocumentPosition( bup ) & 16    // 否则返回a.compareDocumentPosition(bup)&16 在a.compareDocumentPosition(bup)的结果中 只有16&16返回1
+            ));
+        } :  //不支持原生方法 b向上遍历父元素，找到与a比较，相同就返回true，没找到就false
+        function( a, b ) {
+            if ( b ) {
+                while ( (b = b.parentNode) ) {
+                    if ( b === a ) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        };
+
+    /* Sorting
+    ---------------------------------------------------------------------- */
+
+    // Document order sorting
+    sortOrder = hasCompare ?
+    function ( a, b ) {
+
+        // Flag for duplicate removal
+        if ( a === b ) {
+            hasDuplicate = true;
+            return 0;
+        }
+    } : 
+    function ( a, b ) {
+        
+    }    
 
 }
 
