@@ -1344,11 +1344,158 @@ setDocument = Sizzle.setDocument = function ( node ) {
             hasDuplicate = true;
             return 0;
         }
-    } : 
-    function ( a, b ) {
-        
-    }    
 
+        // Sort on method existence if only one input has compareDocumentPosition
+        var compare = !a.compareDocument.Position - !b.compareDocumentPosition;// ??
+        if ( compare ) {
+            return compare;
+        }
+
+        // Calculate position if both inputs belong to the same document
+        compare = ( a.ownerDocument || a ) === ( b.ownerDocument || b ) ? // 两个输入都有cdp 方法且属于东一个document
+            a.compareDocumentPosition( b ) :
+
+            // Otherwise we know they are disconnected
+            1;
+
+        // Disconnected nodes
+        if ( compare & 1 ||
+            (!support.sortDetached && b.compareDocumentPosition( a ) === compare ) ) {
+
+            // Choose the first element that is related to our preferred document
+            if ( a === document || a.ownerDocument === preferredDoc && contains(preferredDoc, a) ) {
+                return -1;
+            }
+            if ( b === document || b.ownerDocument === preferredDoc && contains(preferredDoc, b) ) {
+                return 1;
+            }
+
+            // Maintain original order
+            return sortInput ?
+                ( indexOf( sortInput, a ) - indexOf( sortInput, b ) ) :
+                0;
+        }
+
+        return compare & 4 ? -1 : 1;
+    } : //不支持原生cdp方法
+    function ( a, b ) {
+        // Exit early if the nodes are identical
+        if ( a === b ) {
+            hasDuplicate = true;
+            return 0;
+        }
+        var cur,
+            i = 0,
+            aup = a.parentNode,
+            bup = b.parentNode,
+            ap = [ a ],
+            bp = [ b ];
+
+        // Parentless nodes are either documents or disconnected
+        if ( !aup || !bup ) {
+            return a === doc ? -1 ://a为doc返回-1
+                b === doc ? 1 ://b为doc返回1
+                    aup ? -1 ://aup存在返回-1
+                        bup ? 1 ://bup存在返回1
+                            sortInput ?//sortInput存在返回原顺序
+                                ( indexOf( sortInput, a ) - indexOf( sortInput, b ) ) :
+                                0;
+
+            // If the nodes are siblings, we can do a quick check
+        } else if ( aup === bup ) {
+            return siblingCheck( a, b );
+        }
+
+        // Otherwise we need full lists of their ancestors for comparison
+        cur = a;
+        while ( (cur = cur.parentNode) ) {
+            ap.unshift( cur );
+        }
+        cur = b;
+        while ( (cur = cur.parentNode) ) {
+            bp.unshift( cur );
+        }
+
+        // Walk down the tree looking for a discrepancy
+        while ( ap[i] === bp[i] ) {
+            i++;
+        }
+
+        return i ?
+            // Do a sibling check if the nodes have a common ancestor
+            siblingCheck( ap[i], bp[i] ) :
+
+            // Otherwise nodes in our document sort first
+            ap[i] === preferredDoc ? -1 :
+                bp[i] === preferredDoc ? 1 :
+                    0;
+
+    };
+
+    return document;
+};
+
+Sizzle.matches = function( expr, elements ) {
+    return Sizzle( expr, null, null, elements );
+};
+
+Sizzle.matchesSelector = function( elem, expr ) {  //兼容的matchesSelector，检查单个元素elem是否匹配expr
+        // Set document vars if needed //如果elem所属文档不是当前文档，重设文档相关变量
+        if ( ( elem.ownerDocument || elem ) !== document ) {
+            setDocument( elem );
+        }
+
+        // Make sure that attribute selectors are quoted 	//去掉属性选择器多余的空白，添加单引号确保属性值被引号包围
+        expr = expr.replace( rattributeQuotes, "='$1']" );
+
+        if ( support.matchesSelector && documentIsHTML &&
+            !compilerCache[ expr + " " ] &&
+            ( !rbuggyMatches || !rbuggyMatches.test( expr ) ) &&
+            ( !rbuggyQSA     || !rbuggyQSA.test( expr ) ) ) {
+            //浏览器对matchesSelector，qsa的支持很完美
+            try {
+                var ret = matches.call( elem, expr ); //使用原生的machesSelector得到结果
+
+                // IE 9's matchesSelector returns false on disconnected nodes
+                if ( ret || support.disconnectedMatch ||
+                    // As well, disconnected nodes are said to be in a document
+                    // fragment in IE 9  当ret有结果 or 浏览器支持断开的节点匹配 or elem不在documentFragment中时，返回ret
+                    elem.document && elem.document.nodeType !== 11 ) {
+                    return ret;
+                }
+            } catch (e) {}
+        }
+    //浏览器不能完美支持qsa和matchesSelector，使用Sizzle函数，候选集设置为[elem]，检查返回结果
+        return Sizzle( expr, document, null, [ elem ] ).length > 0;
+    };
+
+Sizzle.contains = function( context, elem ) {
+    // Set document vars if needed
+    if ( ( context.ownerDocument || context ) !== document ) {
+        setDocument( context );
+    }
+    return contains( context, elem );
+};
+
+Sizzle.attr = function( elem, name ) {
+    // Set document vars if needed
+    if ( ( elem.ownerDocument || elem ) !== document ) {
+        setDocument( elem );
+    }
+
+    var fn = Expr.attrHandle[ name.toLowerCase() ],
+        // Don't get fooled by Object.prototype properties (jQuery #13807)
+        val = fn && hasOwn.call( Expr.attrHandle, name.toLowerCase() ) ?
+            fn( elem, name, !documentIsHTML ) :
+            undefined;
+
+    return val !== undefined ?
+        val :
+        support.attributes || !documentIsHTML ?
+            elem.getAttribute( name ) :
+            (val = elem.getAttributeNode(name)) && val.specified ?
+                val.value :
+                null;
 }
 
 
@@ -1396,6 +1543,13 @@ Expr = Sizzle.selector = {// 减少字符，缩短作用域链，方便压缩
 
 // Initialize against the default document 初始化默认文档
 setDocument();
+
+// Support: Webkit<537.32 - Safari 6.0.3/Chrome 25 (fixed in Chrome 27)
+// Detached nodes confoundingly follow *each other*
+    support.sortDetached = assert(function( div1 ) {
+        // Should return 1, but returns 4 (following)
+        return div1.compareDocumentPosition( document.createElement("div") ) & 1;
+    });
 
 // tokens 转化为selector
 function toSelector( tokens ) {
