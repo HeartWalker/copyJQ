@@ -1498,11 +1498,77 @@ Sizzle.attr = function( elem, name ) {
                 null;
 }
 
-
 Sizzle.error = function ( msg ) {
   throw new Error( "Syntax error, unrecognized expression: " +msg );
 };
 
+/**
+ * Document sorting and removing duplicates 文档排序去重
+ * @param {ArrayLike} results
+ */
+Sizzle.uniqueSort = function ( results ) { //??
+    var elem,
+        duplicates = [],
+        j = 0,
+        i = 0;
+
+    // Unless we *know* we can detect duplicates, assume their presence
+    hasDuplicate = !support.detectDuplicates;
+    sortInput = !support.sortStable && results.slice( 0 ); 	//把参数results转换为数组（slice.call）,得到排序的输入sortInput
+    results.sort( sortOrder );
+
+    if ( hasDuplicate ) {
+        while ( (elem = results[i++]) ) {
+            if ( elem === results[ i ] ) {
+                j = duplicates.push( i );
+            }
+        }
+        while ( j-- ) {
+            results.splice( duplicates[ j ], 1 );
+        }
+    }
+
+    // Clear input after sorting to release objects
+    // See https://github.com/jquery/sizzle/pull/225
+    sortInput = null;
+
+    return results;
+};
+
+/**
+* Utility function for retrieving the text value of an array of DOM nodes
+* @param {Array|Element} elem 获取元素集合中所有元素合并后的文本内容
+*/
+getText = Sizzle.getText = function( elem ) {
+    var node,
+        ret = "",
+        i = 0,
+        nodeType = elem.nodeType;
+
+    if ( !nodeType ) {
+        // If no nodeType, this is expected to be an array 没有nodetype 预期是一个数组
+        while ( (node = elem[i++]) ) {
+            // Do not traverse comment nodes
+            ret += getText( node );
+        }
+    } else if ( nodeType === 1 || nodeType === 9 || nodeType === 11 ) {
+        // Use textContent for elements 为了保持新行的一致性，删除了innerText用法
+        // innerText usage removed for consistency of new lines (jQuery #11153)
+        if ( typeof elem.textContent === "string" ) {
+            return elem.textContent;
+        } else {
+            // Traverse its children
+            for ( elem = elem.firstChild; elem; elem = elem.nextSibling ) {
+                ret += getText( elem );
+            }
+        }
+    } else if ( nodeType === 3 || nodeType === 4 ) {
+        return elem.nodeValue;
+    }
+    // Do not include comment or processing instruction nodes 不要包括注释或处理指令节点
+
+    return ret;
+};
 
 Expr = Sizzle.selector = {// 减少字符，缩短作用域链，方便压缩
 
@@ -1564,6 +1630,18 @@ function toSelector( tokens ) {
 
 
     })( window );
+
+
+
+jQuery.find = Sizzle;
+jQuery.expr = Sizzle.selectors;
+jQuery.expr[ ":" ] = jQuery.expr.pseudos;
+jQuery.uniqueSort = jQuery.unique = Sizzle.uniqueSort;
+jQuery.text = Sizzle.getText;
+jQuery.contains = Sizzle.contains;
+
+
+
 
 
 //兼容 AMD 规范
