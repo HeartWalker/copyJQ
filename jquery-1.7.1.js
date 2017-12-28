@@ -1027,7 +1027,7 @@ jQuery.Callbacks = function( flags ) {
 					// Inspect recursively
 					add( elem );
 				} else if ( type === "function" ) {
-					// Add if not in unique mode and callback is not in
+					// Add if not in unique mode and callback is not in // 若果是unique模式并且已经添加过则不会添加
 					if ( !flags.unique || !self.has( elem ) ) {
 						list.push( elem );
 					}
@@ -1064,7 +1064,7 @@ jQuery.Callbacks = function( flags ) {
 		},
 		// Actual Callbacks object 回调函数列表, jQuery.callback函数的回调值
 		self = {
-			// Add a callback or a collection of callbacks to the list
+			// Add a callback or a collection of callbacks to the list 将一个或一组回调函数添加到列表中
 			add: function() {
 				if ( list ) {
 					var length = list.length;
